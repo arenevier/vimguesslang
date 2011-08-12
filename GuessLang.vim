@@ -21,22 +21,39 @@
 
 " strip email headers except subject content; otherwise, guess would be biased
 " toward english
-function s:stripHeaders()
-    let l:headersend = 0
+function s:getContent()
+    " -1: before headers
+    " 0: inside headers
+    " 1: headers passed
+    let l:headerstatus = -1
     let l:result = []
     for l:line in getline(1, '$')
-        if len(l:line) == 0
-            let l:headersend = 1
-        elseif l:headersend
-            let l:result = add(l:result, l:line)
-        elseif match(l:line, '^Subject:') == 0
-            let l:oldignorecase = &ignorecase
-            set ignorecase
-            let l:result = add(l:result, substitute(l:line, '^Subject:\s*\(Re:\s*\)\?', "", ""))
-            if ! l:oldignorecase
-                set noignorecase
+        if l:headerstatus == -1
+            if match(l:line, '^From:') == 0
+                " the are some headers to edit
+                let l:headerstatus = 0
+            else
+                " the are no headers to edit
+                let l:headerstatus = 1
             endif
         endif
+
+        if l:headerstatus == 0 
+            if len(l:line) == 0
+                " end of headers
+                let l:headerstatus = 1
+            elseif match(l:line, '^Subject:') == 0
+                let l:oldignorecase = &ignorecase
+                set ignorecase
+                let l:result = add(l:result, substitute(l:line, '^Subject:\s*\(Re:\s*\)\?', "", ""))
+                if ! l:oldignorecase
+                    set noignorecase
+                endif
+            endif
+        else
+            let l:result = add(l:result, l:line)
+        endif
+
     endfor
     return join(l:result, "\n")
 endfunction
@@ -49,11 +66,11 @@ function s:trim(str)
 endfunction
 
 function! s:betterLanguage(choices)
-    let l:content = s:stripHeaders()
+    let l:content = s:getContent()
 
     if len(l:content) == 0 
         " no content; default to french
-        return trim(split(a:choices, ",")[0])
+        return s:trim(split(a:choices, ",")[0])
     endif
 
     let l:available = split(system("aspell dicts"))
