@@ -10,11 +10,14 @@
 " Installation:	
 "   - Drop this file into ~/.vim/ftplugin/mail/ directory (create it if needed).
 "   - Make sure filetype plugins are enabled ("filetype plugin on" in your
-"   .vimrc)
+"     .vimrc)
+"   - Define in your .vimrc a variable "g:spell_method" containing the spell
+"     check programm to use. Currently, only "aspell" (default) and "hunspell"
+"     are supported
 "   - Define in your .vimrc a variable "g:spell_choices" containing a comma
-"   separated list of languages to choose from. Otherwise, a default value of
-"   "fr,en" is assumed. If two languages have equal probability, the first one
-"   in the list is choosen.
+"     separated list of languages to choose from. Otherwise, a default value of
+"     "fr,en" is assumed. If two languages have equal probability, the first one
+"     in the list is choosen.
 "
 " Thanks:	Clochix for his idea on the general algorithm
 "===========================================================================
@@ -32,45 +35,54 @@ function s:stripHeaders()
         elseif match(l:line, '^Subject:') == 0
             let l:oldignorecase = &ignorecase
             set ignorecase
-            let l:result = add(l:result, substitute(l:line, '^Subject:\s*\(Re:\s*\)\?', "", ""))
+            let l:result = add(l:result, substitute(l:line, '^Subject:\s*\(Re:\s*\)\?', '', ''))
             if ! l:oldignorecase
                 set noignorecase
             endif
         endif
     endfor
-    return join(l:result, "\n")
+    return join(l:result, '\n')
 endfunction
 
 function s:trim(str)
     let l:res = a:str
-    let l:res = substitute(l:res, '^\s*', "", "")
-    let l:res = substitute(l:res, '\s*$', "", "")
+    let l:res = substitute(l:res, '^\s*', '', '')
+    let l:res = substitute(l:res, '\s*$', '', '')
     return l:res
 endfunction
 
-function! s:betterLanguage(choices)
+function! s:betterLanguage(method, choices)
     let l:content = s:stripHeaders()
 
     if len(l:content) == 0 
         " no content; default to french
-        return trim(split(a:choices, ",")[0])
+        return trim(split(a:choices, ',')[0])
     endif
 
-    let l:available = split(system("aspell dicts"))
+    if a:method == 'aspell'
+        let l:available = split(system('aspell dicts'))
+    elseif a:method == 'hunspell'
+        let l:available = split(system("echo | hunspell -D 2>&1 | grep -v : | grep / | sed 's/\\/.*\\///'"))
+    endif
 
     " for each language, get number of misspelled words according to aspell.
     " The langue with the least misspelled words is considered the spell
     " language
-    let l:lang = ""
+    let l:lang = ''
     let l:missmin = -1
-    for l:guess in split(a:choices, ",")
+    for l:guess in split(a:choices, ',')
         let l:guess = s:trim(l:guess)
         if index(l:available, l:guess) == -1 " lang is  not available in aspell dictionary
-            call s:warning("language " . l:guess . " is not recognized by aspell")
+            call s:warning('language ' . l:guess . ' is not recognized by aspell')
+            call s:warning('available languages ' . join(l:available, ', '))
             continue
         endif
 
-        let l:misspelled = system("cat | aspell -l " . l:guess . " list | sort -u", l:content)
+        if a:method == 'aspell'
+            let l:misspelled = system('cat | aspell -l ' . l:guess . ' list | sort -u', l:content)
+        elseif a:method == 'hunspell'
+            let l:misspelled = system('cat | hunspell -d ' . l:guess . ' -l | sort -u', l:content)
+        endif
         let l:misslen = len(split(l:misspelled))
         if l:misslen == 0
             let l:lang = l:guess
@@ -81,7 +93,7 @@ function! s:betterLanguage(choices)
         endif
     endfor
 
-    return l:lang
+    return strpart(l:lang, 0, 2)
 endfunction
 
 function s:warning(message)
@@ -91,21 +103,35 @@ function s:warning(message)
 endfunction
 
 function s:guessSpellLang()
-    if ! executable('aspell')
-        call s:warning("aspell is not installed")
+    if exists('g:spell_method')
+        let l:method = g:spell_method
+    else
+        let l:method = 'aspell'
+    endif
+    if l:method != 'aspell' && l:method != 'hunspell'
+        call s:warning('Unknown method ' . l:method)
+        return
+    endif
+    if l:method == 'aspell' && ! executable('aspell')
+        call s:warning('aspell is not installed')
+        return
+    endif
+    if l:method == 'hunspell' && ! executable('hunspell')
+        call s:warning('hunspell is not installed')
         return
     endif
 
-    if exists("g:spell_choices")
+    if exists('g:spell_choices')
         let l:choices = g:spell_choices
     else
-        let l:choices = "fr,en"
+        let l:choices = 'fr,en'
     endif
 
-    let l:lang = s:betterLanguage(l:choices)
+    let l:lang = s:betterLanguage(l:method, l:choices)
     set spell
     if len(l:lang)
-        exe "set spelllang=" . l:lang
+        echo 'Detected language' l:lang
+        exe 'set spelllang=' . l:lang
     endif
 endfunction
 
