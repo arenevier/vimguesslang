@@ -21,7 +21,7 @@
 
 " strip email headers except subject content; otherwise, guess would be biased
 " toward english
-function s:getContent()
+function! s:getContent()
     " -1: before headers
     " 0: inside headers
     " 1: headers passed
@@ -58,7 +58,7 @@ function s:getContent()
     return join(l:result, "\n")
 endfunction
 
-function s:trim(str)
+function! s:trimstr(str)
     let l:res = a:str
     let l:res = substitute(l:res, '^\s*', "", "")
     let l:res = substitute(l:res, '\s*$', "", "")
@@ -70,7 +70,7 @@ function! s:betterLanguage(choices)
 
     if len(l:content) == 0 
         " no content; default to french
-        return s:trim(split(a:choices, ",")[0])
+        return s:trimstr(split(a:choices, ",")[0])
     endif
 
     let l:available = split(system("aspell dicts"))
@@ -81,7 +81,7 @@ function! s:betterLanguage(choices)
     let l:lang = ""
     let l:missmin = -1
     for l:guess in split(a:choices, ",")
-        let l:guess = s:trim(l:guess)
+        let l:guess = s:trimstr(l:guess)
         if index(l:available, l:guess) == -1 " lang is  not available in aspell dictionary
             call s:warning("language " . l:guess . " is not recognized by aspell")
             continue
@@ -101,13 +101,13 @@ function! s:betterLanguage(choices)
     return l:lang
 endfunction
 
-function s:warning(message)
+function! s:warning(message)
     echohl WarningMsg 
         echoe a:message
     echohl None
 endfunction
 
-function s:guessSpellLang()
+function! s:guessSpellLang()
     if ! executable('aspell')
         call s:warning("aspell is not installed")
         return
